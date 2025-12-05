@@ -43,73 +43,78 @@ def load_dataset(dir_path):
     return data_mat, np.array(label_list, dtype=np.int32)
 
 # ========== 3. 指定你的训练集 / 测试集目录 ==========
-train_dir = r"C:\Users\Administrator\Desktop\lesson3\digits\trainingDigits"   # 改成你的 402 个训练文件所在文件夹
-test_dir  = r"C:\Users\Administrator\Desktop\lesson3\digits\testDigits"       # 改成你的 186 个测试文件所在文件夹
+train_dir = r"C:\Users\E507\Documents\GitHub\svm\dataset\trainingDigits"  # 你的trainingDigits路径
+test_dir  = r"C:\Users\E507\Documents\GitHub\svm\dataset\testDigits" 
+
+# 验证路径是否存在（新增：提前排查路径问题）
+if not os.path.exists(train_dir):
+    raise FileNotFoundError(f"训练集路径不存在：{train_dir}")
+if not os.path.exists(test_dir):
+    raise FileNotFoundError(f"测试集路径不存在：{test_dir}")
 
 X_train, y_train = load_dataset(train_dir)
 X_test,  y_test  = load_dataset(test_dir)
 
 print("训练集形状：", X_train.shape, " 标签形状：", y_train.shape)
 print("测试集形状：", X_test.shape,  " 标签形状：", y_test.shape)
+# 新增：打印数据集真实类别信息（关键）
+print("训练集包含的数字类别：", np.unique(y_train))
+print("测试集包含的数字类别：", np.unique(y_test))
+print("="*50)
 
 # ========== 4. 配置 SVM + GridSearchCV ==========
-# 这里以 RBF 核为主（手写识别常用），搜索 C 和 gamma
-"""
-【任务 1】：
-    使用 SVC + GridSearchCV 在训练集上搜索最优参数（例如 C 和 gamma）。
+# 任务 1：使用 SVC + GridSearchCV 在训练集上搜索最优参数
+# 创建SVC基础模型（RBF核）
+svc = SVC(kernel="rbf")
 
-    提示：
-    1. 先创建一个 SVC 模型，比如：
-           svc = SVC(kernel="rbf")
-    2. 再构造一个参数网格 param_grid（字典），例如：
-           C  可以在 [0.1, 1, 10, 100] 中选
-           gamma 可以在 [0.001, 0.01, 0.1] 中选
-    3. 使用 GridSearchCV：
-           grid_search = GridSearchCV(
-               estimator=svc,
-               param_grid=param_grid,
-               scoring="accuracy",
-               cv=5,          # 5 折交叉验证
-               n_jobs=-1,     # 可选，加速
-               verbose=1      # 可选，输出日志
-           )
-    4. 调用 grid_search.fit(X_train, y_train) 在训练集上进行搜索。
-    5. 训练完成后，可以打印：
-           grid_search.best_params_
-           grid_search.best_score_
-"""
+# 构造参数网格（C为惩罚系数，gamma为RBF核的带宽参数）
+param_grid = {
+    'C': [0.1, 1, 10, 100],    # 惩罚系数候选值
+    'gamma': [0.001, 0.01, 0.1] # 核函数参数候选值
+}
 
-# 在这里写你自己的 GridSearchCV 代码
-# 示例结构（请自行补充具体实现）：
-# grid_search = GridSearchCV(......)
-# grid_search.fit(X_train, y_train)
-# print("最优参数：", grid_search.best_params_)
-# print("交叉验证下的最佳平均准确率：", grid_search.best_score_)
+# 初始化GridSearchCV
+grid_search = GridSearchCV(
+    estimator=svc,               # 待优化的基础模型
+    param_grid=param_grid,       # 参数搜索网格
+    scoring="accuracy",          # 评估指标：准确率
+    cv=5,                        # 5折交叉验证
+    n_jobs=-1,                   # 使用所有可用CPU核心加速
+    verbose=1                    # 输出搜索过程日志
+)
 
+# 在训练集上执行网格搜索
+print("\n开始网格搜索最优参数...")
+grid_search.fit(X_train, y_train)
 
-# ========== 5. 使用最优模型在测试集上评估（学生完成） ==========
+# 输出最优参数和交叉验证得分
+print("\n最优参数组合：", grid_search.best_params_)
+print("5折交叉验证最佳平均准确率：", round(grid_search.best_score_, 4))
+print("="*50)
 
-"""
-【任务 2】：
-    使用从 GridSearchCV 中得到的最优模型，在测试集上评估性能。
+# ========== 5. 使用最优模型在测试集上评估 ==========
+# 任务 2：使用最优模型评估测试集性能
+# 提取网格搜索得到的最优模型
+best_clf = grid_search.best_estimator_
 
-    提示：
-    1. 从 grid_search 中取出最优模型：
-           best_clf = grid_search.best_estimator_
-    2. 使用 best_clf 对测试集进行预测：
-           y_pred = best_clf.predict(X_test)
-    3. 计算测试集上的准确率：
-           test_acc = accuracy_score(y_test, y_pred)
-    4. 打印结果：
-           print("测试集准确率：", test_acc)
-    5. （选做）打印更详细的分类报告：
-           print(classification_report(y_test, y_pred))
-"""
+# 对测试集进行预测
+y_pred = best_clf.predict(X_test)
 
-# 在这里写你自己的测试集评估代码
-# 例如：
-# best_clf = ...
-# y_pred = ...
-# test_acc = ...
-# print("测试集准确率：", test_acc)
-# print(classification_report(y_test, y_pred))
+# 计算测试集准确率
+test_acc = accuracy_score(y_test, y_pred)
+print("测试集准确率：", round(test_acc, 4))
+
+# 优化：动态生成分类报告的标签（适配真实类别数量）
+print("\n详细分类报告：")
+# 获取测试集的唯一类别并排序
+unique_labels = sorted(np.unique(y_test))
+# 动态生成和真实类别匹配的标签名
+target_names = [f"数字 {label}" for label in unique_labels]
+# 生成分类报告（指定labels参数，避免类别数量不匹配）
+print(classification_report(
+    y_test, 
+    y_pred, 
+    labels=unique_labels,       # 指定真实存在的类别
+    target_names=target_names,  # 匹配类别的名称
+    zero_division=0             # 防止某些类别无预测结果时报错
+))
